@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Pong 游戏 - 难度选择</title>
+  <style>
+    body {
+      background: #111;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      color: #fff;
+      user-select: none;
+    }
+    #difficulty-select {
+      margin-top: 80px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .difficulty-btn {
+      padding: 12px 38px;
+      font-size: 1.5rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #313;
+      color: #fff;
+      transition: background 0.15s;
+      margin: 0 auto;
+    }
+    .difficulty-btn:hover {
+      background: #b11;
+      color: #fff;
+    }
+    #scoreboard {
+      font-family: monospace;
+      font-size: 28px;
+      margin: 24px 0 0 0;
+      letter-spacing: 20px;
+      font-weight: bold;
+      display: none;
+    }
+    #gameCanvas {
+      background: #000;
+      display: block;
+      margin-top: 20px;
+      border: 2px solid #555;
+      box-shadow: 0 0 12px #000;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="difficulty-select">
+    <h2>请选择难度</h2>
+    <button class="difficulty-btn" data-diff="easy">简单</button>
+    <button class="difficulty-btn" data-diff="hard">困难</button>
+    <button class="difficulty-btn" data-diff="nightmare">噩梦</button>
+  </div>
+
+  <div id="scoreboard">0 : 0</div>
+  <canvas id="gameCanvas" width="640" height="400"></canvas>
+
+  <script>
+    // 难度参数
+    const DIFFICULTY_CONFIG = {
+      easy: { speed: 3.0 },
+      hard: { speed: 5.0 },
+      nightmare: { speed: 7.5 }
+    };
+    let chosenDifficulty = 'easy';
+
+    // HTML
+    const difficultySelect = document.getElementById('difficulty-select');
+    const scoreboard = document.getElementById('scoreboard');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 游戏参数
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+    const PADDLE_WIDTH = 12;
+    const PADDLE_HEIGHT = 80;
+    const PADDLE_SPEED = 6;
+    const BALL_SIZE = 14;
+    const BALL_MAX_SPEED = 10;
+
+    // 游戏变量
+    let leftPaddleY, rightPaddleY, ballX, ballY, ballVX, ballVY;
+    let ballInitialSpeed = 3;
+    let gameRunning = false;
+    let keyUp = false, keyDown = false;
+    let playerScore = 0, aiScore = 0;
+    let rafId;
+
+    // 选择难度按钮
+    document.querySelectorAll('.difficulty-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        chosenDifficulty = btn.getAttribute('data-diff');
+        ballInitialSpeed = DIFFICULTY_CONFIG[chosenDifficulty].speed;
+        startGame();
+      });
+    });
+
+    // 启动游戏
+    function startGame() {
+      // 隐藏难度选择
+      difficultySelect.style.display = "none";
+      // 显示画布和比分
+      canvas.style.display = "block";
+      scoreboard.style.display = "block";
+      // 重置一切
+      playerScore = aiScore = 0;
+      resetAll();
+      if (!gameRunning) {
+        gameRunning = true;
+        gameLoop();
+      }
+    }
+    // 重置全部
+    function resetAll() {
+      leftPaddleY = (HEIGHT - PADDLE_HEIGHT) / 2;
+      rightPaddleY = (HEIGHT - PADDLE_HEIGHT) / 2;
+      resetBall((Math.random() < 0.5 ? 1 : -1));
+    }
+    // 重置小球
+    function resetBall(direction = 1) {
+      ballX = (WIDTH - BALL_SIZE) / 2;
+      ballY = (HEIGHT - BALL_SIZE) / 2;
+      ballVX = ballInitialSpeed * direction;
+      ballVY = ballInitialSpeed * (Math.random() * 2 - 1) * 0.6;
+    }
+    // 主循环
+    function gameLoop() {
+      update();
+      draw();
+      rafId = requestAnimationFrame(gameLoop);
+    }
+    // 画网格
+    function drawNet() {
+      ctx.strokeStyle = '#555';
+      ctx.beginPath();
+      for (let i = 0; i < HEIGHT; i += 24) {
+        ctx.moveTo(WIDTH/2, i);
+        ctx.lineTo(WIDTH/2, i + 12);
+      }
+      ctx.stroke();
+    }
+    // 渲染
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      drawNet();
+      // paddles
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(8, leftPaddleY, PADDLE_WIDTH, PADDLE_HEIGHT);
+      ctx.fillRect(WIDTH - 8 - PADDLE_WIDTH, rightPaddleY, PADDLE_WIDTH, PADDLE_HEIGHT);
+      // ball
+      ctx.beginPath();
+      ctx.arc(ballX + BALL_SIZE/2, ballY + BALL_SIZE/2, BALL_SIZE/2, 0, 2 * Math.PI);
+      ctx.fill();
+      scoreboard.textContent = playerScore + " : " + aiScore;
+    }
+    function clamp(val, min, max) {
+      return Math.max(min, Math.min(max, val));
+    }
+
+    // 键盘控制
+    window.addEventListener('keydown', e => {
+      if (e.key === 'ArrowUp') keyUp = true;
+      if (e.key === 'ArrowDown') keyDown = true;
+    });
+    window.addEventListener('keyup', e => {
+      if (e.key === 'ArrowUp') keyUp = false;
+      if (e.key === 'ArrowDown') keyDown = false;
+    });
+    // 鼠标控制左挡板
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      let mouseY = e.clientY - rect.top;
+      leftPaddleY = clamp(mouseY - PADDLE_HEIGHT / 2, 0, HEIGHT - PADDLE_HEIGHT);
+    });
+
+    // 主逻辑
+    function update() {
+      // 左边挡板控制
+      if (keyUp) leftPaddleY -= PADDLE_SPEED;
+      if (keyDown) leftPaddleY += PADDLE_SPEED;
+      leftPaddleY = clamp(leftPaddleY, 0, HEIGHT - PADDLE_HEIGHT);
+
+      // AI（简单：0.88；困难：1；噩梦：1.25）
+      let aiTrackSpeed = {
+        easy: 0.88,
+        hard: 1.05,
+        nightmare: 1.28
+      }[chosenDifficulty];
+      let target = ballY + BALL_SIZE / 2;
+      if (rightPaddleY + PADDLE_HEIGHT / 2 < target - 4) rightPaddleY += PADDLE_SPEED * aiTrackSpeed;
+      else if (rightPaddleY + PADDLE_HEIGHT / 2 > target + 4) rightPaddleY -= PADDLE_SPEED * aiTrackSpeed;
+      rightPaddleY = clamp(rightPaddleY, 0, HEIGHT - PADDLE_HEIGHT);
+
+      // 小球移动
+      ballX += ballVX;
+      ballY += ballVY;
+
+      // 小球碰到上/下边界
+      if (ballY < 0) {
+        ballY = 0;
+        ballVY *= -1;
+      } else if (ballY + BALL_SIZE > HEIGHT) {
+        ballY = HEIGHT - BALL_SIZE;
+        ballVY *= -1;
+      }
+
+      // 小球碰左挡板
+      if (
+        ballX <= 8 + PADDLE_WIDTH &&
+        ballX >= 8 &&
+        ballY + BALL_SIZE > leftPaddleY &&
+        ballY < leftPaddleY + PADDLE_HEIGHT
+      ) {
+        ballX = 8 + PADDLE_WIDTH;
+        ballVX = Math.abs(ballVX) + 0.25;
+        if (Math.abs(ballVX) > BALL_MAX_SPEED) ballVX = BALL_MAX_SPEED;
+        let impact = (ballY + BALL_SIZE / 2 - (leftPaddleY + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
+        ballVY = ballInitialSpeed * impact * 1.1;
+      }
+      // 小球碰右挡板
+      if (
+        ballX + BALL_SIZE >= WIDTH - 8 - PADDLE_WIDTH &&
+        ballX + BALL_SIZE <= WIDTH - 8 &&
+        ballY + BALL_SIZE > rightPaddleY &&
+        ballY < rightPaddleY + PADDLE_HEIGHT
+      ) {
+        ballX = WIDTH - 8 - PADDLE_WIDTH - BALL_SIZE;
+        ballVX = -Math.abs(ballVX) - 0.25;
+        if (Math.abs(ballVX) > BALL_MAX_SPEED) ballVX = -BALL_MAX_SPEED;
+        let impact = (ballY + BALL_SIZE / 2 - (rightPaddleY + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
+        ballVY = ballInitialSpeed * impact * 1.1;
+      }
+      // 得分
+      if (ballX < 0) {
+        aiScore++;
+        resetBall(1);
+      } else if (ballX + BALL_SIZE > WIDTH) {
+        playerScore++;
+        resetBall(-1);
+      }
+    }
+  </script>
+  <script>
+    // 只有选择难度后才会启动主循环
+  </script>
+</body>
+</html>
